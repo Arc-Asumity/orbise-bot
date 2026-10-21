@@ -6,7 +6,6 @@
 // Path /src/discord.rs
 // Module of Discord API
 
-
 use serenity::{
     all::{CommandOptionType, GatewayIntents, GuildId, Interaction, Ready, Message},
     async_trait,
@@ -16,9 +15,26 @@ use serenity::{
     },
     prelude::*,
 };
+use serenity::all::CommandDataOption;
 use tracing::{error, info, debug};
 
 struct Handler;
+
+impl Handler {
+    fn get_response(subcommand: &CommandDataOption) -> String {
+        match &subcommand.value {
+            serenity::all::CommandDataOptionValue::SubCommand(options) => {
+                options
+                    .iter()
+                    .find(|option| option.name == "text")
+                    .and_then(|option| option.value.as_str())
+                    .unwrap_or("")
+                    .to_owned()
+            }
+            _ => String::new(),
+        }
+    }
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -76,7 +92,21 @@ impl EventHandler for Handler {
                         )
                             .required(true),
                     ),
-            );
+            ).add_option(
+            CreateCommandOption::new(
+                CommandOptionType::SubCommand,
+                "ask",
+                "Ask Gemini a question",
+            )
+                .add_sub_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "text",
+                        "Your question",
+                    )
+                        .required(true),
+                ),
+        );
 
 
         match GuildId::new(guild_id)
@@ -105,35 +135,57 @@ impl EventHandler for Handler {
             return;
         };
 
-        let response = match subcommand.name.as_str() {
-            "hello" => "Hello World".to_owned(),
-            "ping" => "Bong!".to_owned(),
-            "echo" => match &subcommand.value {
-                serenity::all::CommandDataOptionValue::SubCommand(options) => {
-                    options
-                        .iter()
-                        .find(|option| option.name == "text")
-                        .and_then(|option| option.value.as_str())
-                        .unwrap_or("")
-                        .to_owned()
+        let (response, deferred) = match subcommand.name.as_str() {
+            "hello" => ("Hello World".to_owned(), false),
+            "ping" => ("Bong!".to_owned(), false),
+            "echo" => {
+                (Self::get_response(subcommand), false)
+            }
+            "ask" => {
+                let text = Self::get_response(subcommand);
+
+                if let Err(err) = command.defer(&ctx.http).await {
+                    error!(?err, "Failed to defer slash command");
+                    return;
                 }
-                _ => String::new(),
-            },
+
+                let response = crate::gemini::ask(&text).await.unwrap_or_else(|err| {
+                    error!(?err, "Gemini request failed");
+                    "Gemini Request Failed.".to_owned()
+                });
+
+                (response, true)
+            }
             _ => return,
         };
 
-        if let Err(err) = command
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
+        let response: String = response.chars().take(1900).collect();
+
+        let result = if deferred {
+            command
+                .edit_response(
+                    &ctx.http,
+                    serenity::builder::EditInteractionResponse::new()
                         .content(response),
-                ),
-            )
-            .await
-        {
+                )
+                .await
+                .map(|_| ())
+        } else {
+            command
+                .create_response(
+                    &ctx.http,
+                    CreateInteractionResponse::Message(
+                        CreateInteractionResponseMessage::new()
+                            .content(response),
+                    ),
+                )
+                .await
+        };
+
+        if let Err(err) = result {
             error!(?err, "Failed to respond to slash command");
         }
+
 
     }
 }

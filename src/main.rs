@@ -9,6 +9,7 @@
 use tracing::error;
 
 mod discord;
+mod gemini;
 
 #[tokio::main]
 async fn main() {
