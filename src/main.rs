@@ -6,31 +6,18 @@
 // Path /src/main.rs
 // Entrypoint for Bot from Orbise
 
+use tracing::error;
+
 mod discord;
-
-use serenity::{
-    all::Ready,
-    async_trait,
-    prelude::*,
-};
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _ctx: Context, ready: Ready) {
-        println!("Logged in as {}", ready.user.name);
-    }
-}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter("serenity=trace")
+        .with_env_filter("debug,serenity=debug")
         .init();
 
     if let Err(error) = discord::start().await {
-        eprintln!("Discord connection error: {error}");
+        error!("Discord connection error: {error}");
     }
 }
 
