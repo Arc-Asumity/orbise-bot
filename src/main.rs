@@ -6,9 +6,10 @@
 // Path /src/main.rs
 // Entrypoint for Bot from Orbise
 
+mod discord;
 
 use serenity::{
-    all::{GatewayIntents, Ready},
+    all::Ready,
     async_trait,
     prelude::*,
 };
@@ -28,19 +29,7 @@ async fn main() {
         .with_env_filter("serenity=trace")
         .init();
 
-    let token = std::env::var("DISCORD_TOKEN")
-        .expect("Please set DISCORD_TOKEN");
-
-    let intents = GatewayIntents::GUILDS;
-
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
-        .await
-        .expect("Error creating Discord client");
-
-    println!("Connecting to Discord...");
-
-    if let Err(error) = client.start().await {
+    if let Err(error) = discord::start().await {
         eprintln!("Discord connection error: {error}");
     }
 }
