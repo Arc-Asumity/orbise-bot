@@ -45,6 +45,7 @@ impl EventHandler for Handler {
             .parse::<u64>()
             .expect("Invalid DISCORD_GUILD_ID");
 
+
         let command = CreateCommand::new("orbise")
             .description("Orbise Bot commands")
             .add_option(
@@ -53,7 +54,30 @@ impl EventHandler for Handler {
                     "hello",
                     "Replies with Hello World",
                 ),
+            )
+            .add_option(
+                CreateCommandOption::new(
+                    CommandOptionType::SubCommand,
+                    "ping",
+                    "Replies with Bong!",
+                ),
+            )
+            .add_option(
+                CreateCommandOption::new(
+                    CommandOptionType::SubCommand,
+                    "echo",
+                    "Repeats the provided text",
+                )
+                    .add_sub_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::String,
+                            "text",
+                            "Text to echo",
+                        )
+                            .required(true),
+                    ),
             );
+
 
         match GuildId::new(guild_id)
             .set_commands(&ctx.http, vec![command])
@@ -81,22 +105,36 @@ impl EventHandler for Handler {
             return;
         };
 
-        if subcommand.name != "hello" {
-            return;
-        }
+        let response = match subcommand.name.as_str() {
+            "hello" => "Hello World".to_owned(),
+            "ping" => "Bong!".to_owned(),
+            "echo" => match &subcommand.value {
+                serenity::all::CommandDataOptionValue::SubCommand(options) => {
+                    options
+                        .iter()
+                        .find(|option| option.name == "text")
+                        .and_then(|option| option.value.as_str())
+                        .unwrap_or("")
+                        .to_owned()
+                }
+                _ => String::new(),
+            },
+            _ => return,
+        };
 
         if let Err(err) = command
             .create_response(
                 &ctx.http,
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
-                        .content("Hello World"),
+                        .content(response),
                 ),
             )
             .await
         {
             error!(?err, "Failed to respond to slash command");
         }
+
     }
 }
 
