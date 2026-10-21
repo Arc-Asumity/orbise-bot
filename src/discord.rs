@@ -8,11 +8,15 @@
 
 
 use serenity::{
-    all::{GatewayIntents, Message, Ready},
+    all::{CommandOptionType, GatewayIntents, GuildId, Interaction, Ready, Message},
     async_trait,
+    builder::{
+        CreateCommand, CreateCommandOption,
+        CreateInteractionResponse, CreateInteractionResponseMessage,
+    },
     prelude::*,
 };
-use tracing::{debug, info};
+use tracing::{error, info, debug};
 
 struct Handler;
 
@@ -33,8 +37,66 @@ impl EventHandler for Handler {
         );
     }
 
-    async fn ready(&self, _ctx: Context, ready: Ready) {
-        info!("Logged in as {}", ready.user.name);
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        info!(user = %ready.user.name, "Bot connected");
+
+        let guild_id = std::env::var("DISCORD_GUILD_ID")
+            .expect("Please set DISCORD_GUILD_ID")
+            .parse::<u64>()
+            .expect("Invalid DISCORD_GUILD_ID");
+
+        let command = CreateCommand::new("orbise")
+            .description("Orbise Bot commands")
+            .add_option(
+                CreateCommandOption::new(
+                    CommandOptionType::SubCommand,
+                    "hello",
+                    "Replies with Hello World",
+                ),
+            );
+
+        match GuildId::new(guild_id)
+            .set_commands(&ctx.http, vec![command])
+            .await
+        {
+            Ok(_) => info!("Slash command registered"),
+            Err(err) => error!(?err, "Failed to register slash command"),
+        }
+    }
+
+    async fn interaction_create(
+        &self,
+        ctx: Context,
+        interaction: Interaction,
+    ) {
+        let Interaction::Command(command) = interaction else {
+            return;
+        };
+
+        if command.data.name != "orbise" {
+            return;
+        }
+
+        let Some(subcommand) = command.data.options.first() else {
+            return;
+        };
+
+        if subcommand.name != "hello" {
+            return;
+        }
+
+        if let Err(err) = command
+            .create_response(
+                &ctx.http,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("Hello World"),
+                ),
+            )
+            .await
+        {
+            error!(?err, "Failed to respond to slash command");
+        }
     }
 }
 
