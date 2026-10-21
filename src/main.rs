@@ -24,6 +24,10 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter("serenity=trace")
+        .init();
+
     let token = std::env::var("DISCORD_TOKEN")
         .expect("Please set DISCORD_TOKEN");
 
